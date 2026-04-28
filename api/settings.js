@@ -18,7 +18,8 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'GET') {
     const raw = await redis.get(KEYS.settings)
-    return res.json(raw || DEFAULT_SETTINGS)
+    // 구버전 데이터에 누락된 필드를 DEFAULT_SETTINGS로 채움
+    return res.json({ ...DEFAULT_SETTINGS, ...(raw || {}) })
   }
 
   if (req.method === 'PUT') {

@@ -42,16 +42,18 @@ export default function AdminView(props: Props) {
       onAdminPwChange(pw)
       setUnlocked(true)
       setPw('')
-      await Promise.all([onRefresh(), onRefreshBookings()])
     } else {
       setLoginErr(result.error ?? '비밀번호가 틀렸습니다.')
     }
     setLogging(false)
   }
 
-  // refresh bookings when entering admin
+  // Bug 5 fix: add onRefreshBookings to deps, run after unlock
   useEffect(() => {
-    if (unlocked && adminPw) onRefreshBookings()
+    if (unlocked && adminPw) {
+      Promise.all([onRefresh(), onRefreshBookings()]).catch(console.error)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unlocked])
 
   if (!unlocked) {
@@ -65,8 +67,7 @@ export default function AdminView(props: Props) {
           <p>관리자 전용 페이지입니다.</p>
           <input
             className="form-input"
-            type="password"
-            value={pw}
+            type="password" value={pw}
             placeholder="비밀번호"
             onChange={e => setPw(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleLogin()}
@@ -83,11 +84,8 @@ export default function AdminView(props: Props) {
 
   return (
     <>
-      {/* ── Admin Header ──────────────────────────────────────────────── */}
       <div className="admin-header-row">
-        <button className="btn btn-sm back-btn" onClick={onBack}>
-          ← 수강생 신청으로
-        </button>
+        <button className="btn btn-sm back-btn" onClick={onBack}>← 수강생 신청으로</button>
         <button
           className="btn btn-sm"
           style={{ width: 'auto', color: 'var(--text-muted)', borderColor: 'var(--border)' }}
@@ -99,11 +97,7 @@ export default function AdminView(props: Props) {
 
       <div className="sub-tabs">
         {TABS.map(t => (
-          <button
-            key={t.id}
-            className={`sub-tab${tab === t.id ? ' active' : ''}`}
-            onClick={() => setTab(t.id)}
-          >
+          <button key={t.id} className={`sub-tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
             {t.label}
           </button>
         ))}

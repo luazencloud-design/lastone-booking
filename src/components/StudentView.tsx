@@ -258,7 +258,7 @@ function PaymentStep({ session, settings, submitting, error, onBack, onSubmit }:
       <div className="steps">
         {([1, 2, 3] as StudentStep[]).map((n, i) => (
           <div key={n} style={{ display: 'flex', alignItems: 'center', flex: i < 2 ? 1 : 'none' }}>
-            <div className={`step-num ${n < 3 ? 'done' : 'active'}`}>{n < 3 ? '✓' : n}</div>
+            <div className={`step-num ${n < 3 ? 'done' : 'active'}`}>{n < 3 ? '✓' : '결제'}</div>
             <span className="step-label">{['세션 선택', '정보 입력', '결제'][i]}</span>
             {i < 2 && <div className="step-line" />}
           </div>

@@ -17,19 +17,24 @@ const EMPTY: SessionForm = {
   isFree: false, customPriceEnabled: false, customPrice: '',
 }
 
-function calcEndTime(startTime: string, durationMinutes: number): string {
+// Bug 4 fix: guard against undefined startTime / durationMinutes
+function calcEndTime(startTime: string | undefined, durationMinutes: number | undefined): string {
+  if (!startTime || !startTime.includes(':')) return '—'
   const [h, m] = startTime.split(':').map(Number)
-  const total = h * 60 + m + durationMinutes
+  if (isNaN(h) || isNaN(m)) return '—'
+  const total = h * 60 + m + (durationMinutes ?? 0)
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
-function formatDuration(min: number): string {
+function formatDuration(min: number | undefined): string {
+  if (!min || isNaN(min)) return '—'
   if (min < 60) return `${min}분`
   const h = Math.floor(min / 60), m = min % 60
   return m > 0 ? `${h}시간 ${m}분` : `${h}시간`
 }
 
 function barColor(s: Session): string {
+  if (!s.capacity) return '#185FA5'
   const pct = s.bookedCount / s.capacity
   if (pct >= 1) return '#E24B4A'
   if (pct >= 0.7) return '#BA7517'
@@ -37,15 +42,18 @@ function barColor(s: Session): string {
 }
 
 export default function AdminSessions({ sessions, settings, adminPw, onRefresh }: Props) {
-  const [form, setForm]     = useState<SessionForm>(EMPTY)
-  const [saving, setSaving] = useState(false)
-  const [err, setErr]       = useState('')
+  const [form, setForm]         = useState<SessionForm>(EMPTY)
+  const [saving, setSaving]     = useState(false)
+  const [err, setErr]           = useState('')
   const [showForm, setShowForm] = useState(false)
+
+  // Bug 1 fix: fallback for undefined defaultPrice (old Redis data)
+  const defaultPrice = settings.defaultPrice ?? 20000
 
   const resolvedPrice = (): number => {
     if (form.isFree) return 0
     if (form.customPriceEnabled) return Number(form.customPrice) || 0
-    return settings.defaultPrice
+    return defaultPrice
   }
 
   const addSession = async () => {
@@ -84,21 +92,20 @@ export default function AdminSessions({ sessions, settings, adminPw, onRefresh }
     catch (e: any) { alert(e.message) }
   }
 
-  const sorted = [...sessions].sort((a, b) =>
-    a.date === b.date ? a.startTime.localeCompare(b.startTime) : a.date.localeCompare(b.date)
-  )
+  // Bug 3 fix: safe sort with undefined guards
+  const sorted = [...sessions].sort((a, b) => {
+    const dateA = a.date ?? '', dateB = b.date ?? ''
+    if (dateA === dateB) return (a.startTime ?? '').localeCompare(b.startTime ?? '')
+    return dateA.localeCompare(dateB)
+  })
 
-  // ── Stats ────────────────────────────────────────────────────────────────
-  const totalSeats   = sessions.reduce((a, s) => a + s.capacity, 0)
-  const bookedSeats  = sessions.reduce((a, s) => a + s.bookedCount, 0)
-  const fullSessions = sessions.filter(s => s.bookedCount >= s.capacity).length
-
-  // Group by subject for dashboard
-  const subjects = Array.from(new Set(sorted.map(s => s.subject)))
+  const totalSeats   = sessions.reduce((a, s) => a + (s.capacity ?? 0), 0)
+  const bookedSeats  = sessions.reduce((a, s) => a + (s.bookedCount ?? 0), 0)
+  const fullSessions = sessions.filter(s => (s.bookedCount ?? 0) >= (s.capacity ?? 1)).length
+  const subjects     = Array.from(new Set(sorted.map(s => s.subject ?? '(미분류)')))
 
   return (
     <>
-      {/* ── Top Stats Row ────────────────────────────────────────────── */}
       <div className="session-stat-row">
         <div className="session-stat">
           <div className="session-stat-val">{sessions.length}</div>
@@ -114,7 +121,6 @@ export default function AdminSessions({ sessions, settings, adminPw, onRefresh }
         </div>
       </div>
 
-      {/* ── Add Button ───────────────────────────────────────────────── */}
       <button
         className={`btn ${showForm ? '' : 'btn-navy'}`}
         style={{ marginBottom: '1rem' }}
@@ -123,18 +129,15 @@ export default function AdminSessions({ sessions, settings, adminPw, onRefresh }
         {showForm ? '✕  닫기' : '＋  새 세션 추가'}
       </button>
 
-      {/* ── Add Form (collapsible) ────────────────────────────────────── */}
       {showForm && (
         <div className="session-add-panel">
           <div className="sap-title">새 세션</div>
 
-          {/* Subject */}
           <div className="sap-subject-wrap">
             <label className="sap-subject-label">📚 수강 과목</label>
             <input
               className="form-input sap-subject-input"
-              type="text"
-              value={form.subject}
+              type="text" value={form.subject}
               placeholder="예) 수학, 영어, 국어"
               onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
             />
@@ -163,7 +166,6 @@ export default function AdminSessions({ sessions, settings, adminPw, onRefresh }
             </div>
           </div>
 
-          {/* Price */}
           <div className="sap-price-row">
             <label className={`sap-price-opt${form.isFree ? ' on' : ''}`}>
               <input type="checkbox" checked={form.isFree}
@@ -177,6 +179,7 @@ export default function AdminSessions({ sessions, settings, adminPw, onRefresh }
                 가격 직접 설정
               </label>
             )}
+            {/* Bug 1 fix: resolvedPrice()는 항상 숫자 반환 보장 */}
             <div className="sap-price-display">
               {form.isFree ? '무료' : `₩${resolvedPrice().toLocaleString()}`}
             </div>
@@ -186,12 +189,11 @@ export default function AdminSessions({ sessions, settings, adminPw, onRefresh }
             <div className="form-group" style={{ marginTop: 8 }}>
               <label className="form-label">가격 (원)</label>
               <input className="form-input" type="number" min="0" value={form.customPrice}
-                placeholder={String(settings.defaultPrice)}
+                placeholder={String(defaultPrice)}
                 onChange={e => setForm(f => ({ ...f, customPrice: e.target.value }))} />
             </div>
           )}
 
-          {/* Live preview */}
           {(form.subject || form.date || form.startTime) && (
             <div className="sap-preview">
               <span className="sap-preview-subject">{form.subject || '(과목 미입력)'}</span>
@@ -206,7 +208,9 @@ export default function AdminSessions({ sessions, settings, adminPw, onRefresh }
                   </span>
                 </>
               )}
-              <span className="sap-preview-price">{form.isFree ? '무료' : `₩${resolvedPrice().toLocaleString()}`}</span>
+              <span className="sap-preview-price">
+                {form.isFree ? '무료' : `₩${resolvedPrice().toLocaleString()}`}
+              </span>
             </div>
           )}
 
@@ -217,14 +221,13 @@ export default function AdminSessions({ sessions, settings, adminPw, onRefresh }
         </div>
       )}
 
-      {/* ── Session Dashboard ─────────────────────────────────────────── */}
       {sorted.length === 0 ? (
         <div className="empty-state">등록된 세션이 없습니다.<br/>위 버튼으로 첫 세션을 추가해보세요.</div>
       ) : (
         subjects.map(subject => {
-          const group = sorted.filter(s => s.subject === subject)
-          const groupBooked = group.reduce((a, s) => a + s.bookedCount, 0)
-          const groupTotal  = group.reduce((a, s) => a + s.capacity, 0)
+          const group        = sorted.filter(s => (s.subject ?? '(미분류)') === subject)
+          const groupBooked  = group.reduce((a, s) => a + (s.bookedCount ?? 0), 0)
+          const groupTotal   = group.reduce((a, s) => a + (s.capacity ?? 0), 0)
           return (
             <div key={subject} className="session-subject-section">
               <div className="session-subject-header">
@@ -233,19 +236,24 @@ export default function AdminSessions({ sessions, settings, adminPw, onRefresh }
               </div>
               <div className="session-card-grid">
                 {group.map(s => {
-                  const full = s.bookedCount >= s.capacity
-                  const rem  = s.capacity - s.bookedCount
-                  const pct  = s.capacity > 0 ? Math.round((s.bookedCount / s.capacity) * 100) : 0
+                  const cap  = s.capacity ?? 1
+                  const book = s.bookedCount ?? 0
+                  const full = book >= cap
+                  const rem  = cap - book
+                  const pct  = cap > 0 ? Math.round((book / cap) * 100) : 0
                   return (
                     <div key={s.id} className={`session-dash-card${full ? ' full' : ''}`}>
                       <div className="sdc-top">
-                        <div className="sdc-date">{s.date}</div>
+                        <div className="sdc-date">{s.date ?? '—'}</div>
+                        {/* Bug 2 fix: s.price ?? 0 */}
                         <span className={`badge ${s.isFree ? 'badge-green' : 'badge-blue'}`}>
-                          {s.isFree ? '무료' : `₩${s.price.toLocaleString()}`}
+                          {s.isFree ? '무료' : `₩${(s.price ?? 0).toLocaleString()}`}
                         </span>
                       </div>
                       <div className="sdc-time">
-                        {s.startTime} – {calcEndTime(s.startTime, s.durationMinutes)}
+                        {calcEndTime(s.startTime, s.durationMinutes) !== '—'
+                          ? `${s.startTime} – ${calcEndTime(s.startTime, s.durationMinutes)}`
+                          : s.startTime ?? '—'}
                         <span className="sdc-duration">({formatDuration(s.durationMinutes)})</span>
                       </div>
                       <div className="sdc-bar-wrap">
@@ -256,7 +264,7 @@ export default function AdminSessions({ sessions, settings, adminPw, onRefresh }
                           <span className={full ? 'sdc-full' : rem <= 2 ? 'sdc-few' : 'sdc-ok'}>
                             {full ? '마감' : `잔여 ${rem}석`}
                           </span>
-                          <span className="sdc-count">{s.bookedCount}/{s.capacity}</span>
+                          <span className="sdc-count">{book}/{cap}</span>
                         </div>
                       </div>
                       <button className="sdc-del-btn" onClick={() => deleteSession(s.id)}>삭제</button>
