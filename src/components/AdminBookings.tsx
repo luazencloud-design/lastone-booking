@@ -1,32 +1,39 @@
-import type { Slot, Booking, Settings } from '../types'
+import type { Session, Booking, Settings } from '../types'
+import * as api from '../api'
 
-interface Props {
-  slots: Slot[]
-  bookings: Booking[]
-  settings: Settings
-  onSlotsChange: (s: Slot[]) => void
-  onBookingsChange: (b: Booking[]) => void
+const METHOD_LABELS: Record<string, string> = {
+  card: '신용/체크카드', easypay: '간편결제', transfer: '계좌이체', free: '무료',
 }
 
-export default function AdminBookings({ slots, bookings, settings, onSlotsChange, onBookingsChange }: Props) {
-  const totalRev = bookings.length * settings.price
+interface Props {
+  sessions: Session[]
+  bookings: Booking[]
+  settings: Settings
+  adminPw: string
+  onSessionsChange: (s: Session[]) => void
+  onBookingsChange: (b: Booking[]) => void
+  onRefresh: () => Promise<void>
+}
 
-  const deleteBooking = (id: string) => {
+function endTime(startTime: string, dur: number) {
+  const [h, m] = startTime.split(':').map(Number)
+  const total = h * 60 + m + dur
+  return `${String(Math.floor(total/60)).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`
+}
+
+export default function AdminBookings({ sessions, bookings, settings, adminPw, onRefresh }: Props) {
+  const totalRev = bookings.reduce((acc, bk) => {
+    const s = sessions.find(x => x.id === bk.sessionId)
+    return acc + (s?.price ?? 0)
+  }, 0)
+
+  const del = async (id: string) => {
     if (!confirm('이 신청을 삭제하시겠습니까?')) return
-    const bk = bookings.find(b => b.id === id)
-    if (bk) {
-      onSlotsChange(slots.map(s =>
-        s.id === bk.slotId && s.bookedCount > 0
-          ? { ...s, bookedCount: s.bookedCount - 1 }
-          : s
-      ))
-    }
-    onBookingsChange(bookings.filter(b => b.id !== id))
+    try { await api.deleteBooking(id, adminPw); await onRefresh() }
+    catch (e: any) { alert(e.message) }
   }
 
-  if (bookings.length === 0) {
-    return <div className="empty-state">아직 신청 내역이 없습니다.</div>
-  }
+  if (bookings.length === 0) return <div className="empty-state">아직 신청 내역이 없습니다.</div>
 
   const sorted = [...bookings].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
@@ -38,17 +45,18 @@ export default function AdminBookings({ slots, bookings, settings, onSlotsChange
       <div className="card">
         <div className="card-title">전체 신청 내역</div>
         {sorted.map(bk => {
-          const sl = slots.find(s => s.id === bk.slotId)
+          const s = sessions.find(x => x.id === bk.sessionId)
           return (
             <div key={bk.id} className="bk-row">
               <div>
                 <div className="bk-name">{bk.name}</div>
-                <div className="bk-meta">{bk.subject} · {bk.phone}</div>
+                <div className="bk-meta">{s ? `${s.subject} · ${s.date} ${s.startTime}–${endTime(s.startTime, s.durationMinutes)}` : '(세션 삭제됨)'}</div>
                 <div className="bk-meta">
-                  {sl ? `${sl.date} ${sl.time}` : '(날짜 삭제됨)'} · 주문번호 {bk.orderNumber}
+                  {bk.phone} · {METHOD_LABELS[bk.paymentMethod] ?? bk.paymentMethod}
+                  {bk.paymentMethod !== 'free' && ` · ${bk.orderNumber}`}
                 </div>
               </div>
-              <button className="btn btn-ghost-red btn-sm" onClick={() => deleteBooking(bk.id)}>삭제</button>
+              <button className="btn btn-ghost-red btn-sm" onClick={() => del(bk.id)}>삭제</button>
             </div>
           )
         })}
