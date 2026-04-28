@@ -37,14 +37,14 @@ export default function AdminView(props: Props) {
 
   const handleLogin = async () => {
     setLogging(true); setLoginErr('')
-    const ok = await api.verifyAdmin(pw)
-    if (ok) {
+    const result = await api.verifyAdmin(pw)
+    if (result.ok) {
       onAdminPwChange(pw)
       setUnlocked(true)
       setPw('')
       await Promise.all([onRefresh(), onRefreshBookings()])
     } else {
-      setLoginErr('비밀번호가 틀렸습니다.')
+      setLoginErr(result.error ?? '비밀번호가 틀렸습니다.')
     }
     setLogging(false)
   }

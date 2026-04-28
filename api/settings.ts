@@ -1,7 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { redis, KEYS, checkAdmin } from './_redis'
 import type { Settings } from '../src/types'
-import { DEFAULT_SETTINGS } from '../src/types'
+
+const DEFAULT_SETTINGS: Settings = {
+  className: '라스트원 넥스트원 보충',
+  defaultPrice: 20000,
+  smartStoreUrl: '',
+  bankName: '',
+  bankAccount: '',
+  bankHolder: '',
+  paymentMethods: { card: true, easypay: true, transfer: true },
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')

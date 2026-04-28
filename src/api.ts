@@ -15,12 +15,12 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
-export async function verifyAdmin(password: string): Promise<boolean> {
+export async function verifyAdmin(password: string): Promise<{ ok: boolean; error?: string }> {
   try {
     await req('/auth', { method: 'POST', body: JSON.stringify({ password }) })
-    return true
-  } catch {
-    return false
+    return { ok: true }
+  } catch (e: any) {
+    return { ok: false, error: e.message || '알 수 없는 오류' }
   }
 }
 
