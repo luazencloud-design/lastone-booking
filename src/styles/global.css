@@ -321,3 +321,109 @@ body {
   border-color: var(--gold-mid) !important;
   box-shadow: 0 0 0 3px rgba(186,117,23,0.12) !important;
 }
+
+/* ── Session Dashboard ────────────────────────────────────────────────────── */
+.session-stat-row {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 10px; margin-bottom: 1rem;
+}
+.session-stat {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 12px; text-align: center;
+}
+.session-stat-val { font-size: 24px; font-weight: 700; color: var(--text); line-height: 1; }
+.session-stat-total { font-size: 14px; font-weight: 400; color: var(--text-muted); }
+.session-stat-lbl { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+
+/* ── Add Form Panel ───────────────────────────────────────────────────────── */
+.session-add-panel {
+  background: var(--surface); border: 1.5px solid var(--navy);
+  border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 1rem;
+}
+.sap-title {
+  font-size: 13px; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--navy); text-transform: uppercase; margin-bottom: 1.25rem;
+}
+.sap-subject-wrap { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.sap-subject-label {
+  display: block; font-size: 13px; font-weight: 700;
+  color: var(--text); margin-bottom: 7px;
+}
+.sap-subject-input { font-size: 16px !important; font-weight: 600 !important; padding: 12px 14px !important; }
+.sap-subject-input:focus {
+  border-color: var(--gold-mid) !important;
+  box-shadow: 0 0 0 3px rgba(186,117,23,0.12) !important;
+}
+.sap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sap-price-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+}
+.sap-price-opt {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--text-muted); cursor: pointer;
+  padding: 5px 11px; border: 1px solid var(--border);
+  border-radius: 20px; transition: all 0.15s; user-select: none;
+}
+.sap-price-opt input { width: 14px; height: 14px; accent-color: var(--navy); cursor: pointer; }
+.sap-price-opt.on { background: var(--blue-50); border-color: var(--navy-light); color: var(--navy); font-weight: 500; }
+.sap-price-display {
+  margin-left: auto; font-size: 16px; font-weight: 700; color: var(--navy-mid);
+}
+.sap-preview {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 14px; margin-top: 14px;
+  font-size: 13px; color: var(--text-muted);
+}
+.sap-preview-subject { font-weight: 700; color: var(--text); }
+.sap-preview-sep { color: var(--border-mid); }
+.sap-preview-price { margin-left: auto; font-weight: 700; color: var(--navy-light); }
+
+/* ── Subject Sections ─────────────────────────────────────────────────────── */
+.session-subject-section { margin-bottom: 1.25rem; }
+.session-subject-header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 10px; padding: 0 2px;
+}
+.session-subject-name {
+  font-size: 16px; font-weight: 700; color: var(--text);
+}
+.session-subject-meta { font-size: 12px; color: var(--text-muted); }
+
+/* ── Session Dashboard Cards ──────────────────────────────────────────────── */
+.session-card-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px;
+}
+.session-dash-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 14px; transition: all 0.15s;
+  position: relative;
+}
+.session-dash-card:hover { border-color: var(--navy-light); box-shadow: 0 2px 12px rgba(4,44,83,0.08); }
+.session-dash-card.full { opacity: 0.6; }
+.sdc-top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.sdc-date { font-size: 14px; font-weight: 700; color: var(--text); }
+.sdc-time { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+.sdc-duration { font-size: 11px; color: var(--text-hint); margin-left: 4px; }
+.sdc-bar-wrap { margin-bottom: 10px; }
+.sdc-bar {
+  height: 5px; background: var(--surface-2); border-radius: 3px;
+  overflow: hidden; margin-bottom: 6px; border: 1px solid var(--border);
+}
+.sdc-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
+.sdc-seats { display: flex; justify-content: space-between; font-size: 12px; }
+.sdc-ok   { color: #27500A; font-weight: 600; }
+.sdc-few  { color: #BA7517; font-weight: 600; }
+.sdc-full { color: #E24B4A; font-weight: 600; }
+.sdc-count { color: var(--text-hint); }
+.sdc-del-btn {
+  width: 100%; padding: 6px; border: 1px solid var(--red-100);
+  border-radius: var(--radius); background: transparent;
+  color: var(--red-600); font-size: 11px; cursor: pointer;
+  font-family: inherit; transition: all 0.15s;
+}
+.sdc-del-btn:hover { background: var(--red-50); }
