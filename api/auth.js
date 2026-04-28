@@ -1,25 +1,21 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).end()
 
-  // Vercel이 body를 못 파싱한 경우 수동으로 처리
   let body = req.body
   if (!body || typeof body === 'string') {
     try { body = JSON.parse(body || '{}') } catch { body = {} }
   }
 
-  const { password } = body ?? {}
-
+  const { password } = body || {}
   const adminPw = process.env.ADMIN_PASSWORD
-  if (!adminPw) {
-    return res.status(500).json({ error: 'ADMIN_PASSWORD 환경변수가 설정되지 않았습니다. Vercel 대시보드를 확인해주세요.' })
-  }
 
+  if (!adminPw) {
+    return res.status(500).json({ error: 'ADMIN_PASSWORD 환경변수가 설정되지 않았습니다.' })
+  }
   if (String(password).trim() === String(adminPw).trim()) {
     return res.json({ ok: true })
   }
