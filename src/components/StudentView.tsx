@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { Session, Booking, Settings, StudentStep, StudentForm, PaymentMethod } from '../types'
+import type { Session, Booking, Settings, StudentStep, StudentForm } from '../types'
 
 interface Props {
   sessions: Session[]
@@ -61,11 +61,9 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
   )
   const sel = sessions.find(s => s.id === selId) ?? null
 
-  // [버그#4] step 2/3 도중 선택한 세션이 삭제되면 step 1로 자동 복귀
   useEffect(() => {
     if (step > 1 && selId && !sel) {
-      setStep(1)
-      setSelId(null)
+      setStep(1); setSelId(null)
       setError('선택한 세션이 삭제되었습니다. 다시 선택해주세요.')
     }
   }, [sessions, selId, sel, step])
@@ -78,28 +76,26 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
   const goStep3 = () => {
     if (!form.name.trim() || !form.phone.trim()) { setError('이름과 연락처를 입력해주세요.'); return }
     setError('')
-    if (sel?.isFree) handleSubmit('free', '')
+    if (sel?.isFree) handleSubmit()
     else setStep(3)
   }
 
-  const handleSubmit = async (method: PaymentMethod, orderNumber: string) => {
+  const handleSubmit = async (orderNumber = '') => {
     if (!sel) return
-    if (method !== 'free' && !orderNumber.trim()) {
-      setError(method === 'transfer' ? '입금자명을 입력해주세요.' : '주문번호를 입력해주세요.')
-      return
+    if (!sel.isFree && !orderNumber.trim()) {
+      setError('주문번호를 입력해주세요.'); return
     }
     setSubmitting(true); setError('')
     try {
-      const booking: Booking = {
+      const result = await onBook({
         id: 'bk_' + Date.now(),
         sessionId: sel.id,
         name: form.name,
         phone: form.phone,
-        paymentMethod: method,
+        paymentMethod: sel.isFree ? 'free' : 'card',
         orderNumber,
         createdAt: new Date().toISOString(),
-      }
-      const result = await onBook(booking)
+      })
       setDoneBooking(result)
       setDone(true)
     } catch (e: any) {
@@ -122,7 +118,7 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
           </p>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
             {doneBooking.name} 수강생
-            {doneBooking.paymentMethod !== 'free' && ` · ${doneBooking.orderNumber}`}
+            {!sel.isFree && doneBooking.orderNumber && ` · 주문번호 ${doneBooking.orderNumber}`}
           </p>
         </div>
         <div className="divider" />
@@ -141,9 +137,7 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
         </div>
       </>
     )
-
     const subjects = Array.from(new Set(sorted.map(s => s.subject ?? '기타')))
-
     return (
       <>
         <Steps current={1} />
@@ -179,7 +173,6 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
                           <span className={`badge ${full ? 'badge-red' : rem <= 2 ? 'badge-amber' : 'badge-green'}`}>
                             {full ? '마감' : `잔여 ${rem}석`}
                           </span>
-                          {/* [버그#6] price undefined 방어 */}
                           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                             {s.isFree ? '무료' : `₩${(s.price ?? 0).toLocaleString()}`}
                           </span>
@@ -202,7 +195,6 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
   }
 
   // ── Step 2 ─────────────────────────────────────────────────────────────────
-  // [버그#4] sel이 null이면 step 1로 돌아감 (useEffect에서 처리되지만 렌더 방어)
   if (step === 2) {
     if (!sel) return null
     return (
@@ -239,55 +231,27 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
     )
   }
 
-  // ── Step 3 ─────────────────────────────────────────────────────────────────
+  // ── Step 3: 스마트스토어 결제 ──────────────────────────────────────────────
   if (step === 3) {
     if (!sel) return null
-    return (
-      <PaymentStep
-        session={sel}
-        settings={settings}
-        name={form.name}
-        submitting={submitting}
-        error={error}
-        onBack={() => setStep(2)}
-        onSubmit={handleSubmit}
-      />
-    )
+    return <PaymentStep session={sel} settings={settings} submitting={submitting} error={error}
+      onBack={() => setStep(2)} onSubmit={handleSubmit} />
   }
 
   return null
 }
 
 // ── Payment Step ───────────────────────────────────────────────────────────────
-interface PaymentStepProps {
+function PaymentStep({ session, settings, submitting, error, onBack, onSubmit }: {
   session: Session
   settings: Settings
-  name: string
   submitting: boolean
   error: string
   onBack: () => void
-  onSubmit: (method: PaymentMethod, orderNumber: string) => void
-}
-
-function PaymentStep({ session, settings, name, submitting, error, onBack, onSubmit }: PaymentStepProps) {
-  const [method, setMethod]       = useState<PaymentMethod | ''>('')
-  const [orderNum, setOrderNum]   = useState('')
-  const [depositor, setDepositor] = useState(name)
-
-  // [버그#5] paymentMethods undefined 방어
-  const pm = settings.paymentMethods ?? { card: true, easypay: true, transfer: true }
-
-  const availableMethods: { id: PaymentMethod; label: string; icon: string }[] = [
-    ...(pm.card     ? [{ id: 'card'     as PaymentMethod, label: '신용/체크카드',       icon: '💳' }] : []),
-    ...(pm.easypay  ? [{ id: 'easypay'  as PaymentMethod, label: '간편결제',             icon: '⚡' }] : []),
-    ...(pm.transfer ? [{ id: 'transfer' as PaymentMethod, label: '무통장입금·계좌이체',  icon: '🏦' }] : []),
-  ]
-
-  const handlePay = () => {
-    if (!method) return
-    if (method === 'transfer') onSubmit('transfer', depositor)
-    else onSubmit(method, orderNum)
-  }
+  onSubmit: (orderNumber: string) => void
+}) {
+  const [orderNum, setOrderNum] = useState('')
+  const hasUrl = Boolean(settings.smartStoreUrl?.trim())
 
   return (
     <>
@@ -306,81 +270,48 @@ function PaymentStep({ session, settings, name, submitting, error, onBack, onSub
           <div className="session-summary-subject">{session.subject}</div>
           <div className="session-summary-meta">
             {session.date} · {session.startTime} – {endTime(session.startTime, session.durationMinutes)}
-            &nbsp;·&nbsp;{name} 수강생
           </div>
         </div>
 
+        {/* 금액 표시 */}
         <div className="pay-box">
           <div className="pay-label">결제 금액</div>
           <div className="pay-amount">₩{(session.price ?? 0).toLocaleString()}</div>
         </div>
 
-        <div className="card-title">결제 수단 선택</div>
-        <div className="payment-methods">
-          {availableMethods.map(m => (
-            <button
-              key={m.id}
-              className={`payment-method-btn${method === m.id ? ' selected' : ''}`}
-              onClick={() => setMethod(m.id)}
-            >
-              <span className="pm-icon">{m.icon}</span>
-              <span className="pm-label">{m.label}</span>
-            </button>
-          ))}
+        {/* 스마트스토어 버튼 */}
+        {hasUrl ? (
+          <a href={settings.smartStoreUrl} target="_blank" rel="noreferrer"
+            style={{ display: 'block', textDecoration: 'none', marginBottom: 16 }}>
+            <button className="btn btn-naver">네이버 스마트스토어에서 결제하기 →</button>
+          </a>
+        ) : (
+          <div className="alert alert-amber" style={{ marginBottom: 16 }}>
+            스마트스토어 링크가 설정되지 않았습니다. 관리자에게 문의해주세요.
+          </div>
+        )}
+
+        {/* 주문번호 입력 */}
+        <div className="form-group">
+          <label className="form-label">
+            주문번호&nbsp;
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>결제 완료 후 네이버페이 주문번호 입력</span>
+          </label>
+          <input
+            className="form-input"
+            type="text"
+            value={orderNum}
+            placeholder="예) 2024xxxxxxxxxxxx"
+            onChange={e => setOrderNum(e.target.value)}
+          />
         </div>
 
-        {(method === 'card' || method === 'easypay') && (
-          <div style={{ marginTop: '1rem' }}>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.7 }}>
-              아래 버튼으로 스마트스토어에서 결제 후 주문번호를 입력해주세요.
-            </p>
-            {settings.smartStoreUrl ? (
-              <a href={settings.smartStoreUrl} target="_blank" rel="noreferrer"
-                style={{ display: 'block', textDecoration: 'none', marginBottom: 12 }}>
-                <button className="btn btn-naver">네이버 스마트스토어에서 결제하기</button>
-              </a>
-            ) : (
-              <div className="alert alert-amber" style={{ marginBottom: 12 }}>
-                스마트스토어 링크가 설정되지 않았습니다. 관리자에게 문의해주세요.
-              </div>
-            )}
-            <div className="form-group">
-              <label className="form-label">
-                주문번호&nbsp;<span style={{ color: '#A32D2D', fontSize: 11 }}>결제 후 입력</span>
-              </label>
-              <input className="form-input" type="text" value={orderNum}
-                placeholder="네이버 주문번호" onChange={e => setOrderNum(e.target.value)} />
-            </div>
-          </div>
-        )}
+        {error && <div className="alert alert-red" style={{ marginBottom: 12 }}>{error}</div>}
 
-        {method === 'transfer' && (
-          <div style={{ marginTop: '1rem' }}>
-            {settings.bankAccount ? (
-              <div className="bank-info-box">
-                <div className="bank-info-label">입금 계좌</div>
-                <div className="bank-info-account">{settings.bankName} {settings.bankAccount}</div>
-                <div className="bank-info-holder">예금주: {settings.bankHolder}</div>
-                <div className="bank-info-amount">₩{(session.price ?? 0).toLocaleString()}</div>
-              </div>
-            ) : (
-              <div className="alert alert-amber" style={{ marginBottom: 12 }}>
-                계좌 정보가 설정되지 않았습니다. 관리자에게 문의해주세요.
-              </div>
-            )}
-            <div className="form-group" style={{ marginTop: 12 }}>
-              <label className="form-label">입금자명</label>
-              <input className="form-input" type="text" value={depositor}
-                placeholder="입금자 이름" onChange={e => setDepositor(e.target.value)} />
-            </div>
-          </div>
-        )}
-
-        {error && <div className="alert alert-red" style={{ margin: '12px 0' }}>{error}</div>}
-
-        <div className="btn-row" style={{ marginTop: '1rem' }}>
+        <div className="btn-row">
           <button className="btn" onClick={onBack}>← 이전</button>
-          <button className="btn btn-navy" onClick={handlePay} disabled={!method || submitting}>
+          <button className="btn btn-navy" onClick={() => onSubmit(orderNum)}
+            disabled={submitting || !orderNum.trim()}>
             {submitting ? '처리 중...' : '신청 완료'}
           </button>
         </div>
