@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Session, Booking, Settings, StudentStep, StudentForm, PaymentMethod } from '../types'
 
 interface Props {
@@ -9,14 +9,15 @@ interface Props {
 
 const EMPTY_FORM: StudentForm = { name: '', phone: '', paymentMethod: '', orderNumber: '' }
 
-function endTime(startTime: string, durationMinutes: number): string {
+function endTime(startTime: string | undefined, durationMinutes: number): string {
+  if (!startTime || !startTime.includes(':')) return '--:--'
   const [h, m] = startTime.split(':').map(Number)
-  const total = h * 60 + m + durationMinutes
+  const total = h * 60 + m + (durationMinutes || 0)
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
 function formatDuration(min: number): string {
-  if (min < 60) return `${min}분`
+  if (!min || min < 60) return `${min || 0}분`
   const h = Math.floor(min / 60), m = min % 60
   return m > 0 ? `${h}시간 ${m}분` : `${h}시간`
 }
@@ -45,18 +46,29 @@ function Steps({ current }: { current: StudentStep }) {
 }
 
 export default function StudentView({ sessions, settings, onBook }: Props) {
-  const [step, setStep]         = useState<StudentStep>(1)
-  const [selId, setSelId]       = useState<string | null>(null)
-  const [form, setForm]         = useState<StudentForm>(EMPTY_FORM)
-  const [done, setDone]         = useState(false)
+  const [step, setStep]               = useState<StudentStep>(1)
+  const [selId, setSelId]             = useState<string | null>(null)
+  const [form, setForm]               = useState<StudentForm>(EMPTY_FORM)
+  const [done, setDone]               = useState(false)
   const [doneBooking, setDoneBooking] = useState<Booking | null>(null)
   const [submitting, setSubmitting]   = useState(false)
   const [error, setError]             = useState('')
 
   const sorted = [...sessions].sort((a, b) =>
-    a.date === b.date ? a.startTime.localeCompare(b.startTime) : a.date.localeCompare(b.date)
+    a.date === b.date
+      ? (a.startTime ?? '').localeCompare(b.startTime ?? '')
+      : (a.date ?? '').localeCompare(b.date ?? '')
   )
   const sel = sessions.find(s => s.id === selId) ?? null
+
+  // [버그#4] step 2/3 도중 선택한 세션이 삭제되면 step 1로 자동 복귀
+  useEffect(() => {
+    if (step > 1 && selId && !sel) {
+      setStep(1)
+      setSelId(null)
+      setError('선택한 세션이 삭제되었습니다. 다시 선택해주세요.')
+    }
+  }, [sessions, selId, sel, step])
 
   const reset = () => {
     setStep(1); setSelId(null); setForm(EMPTY_FORM)
@@ -66,12 +78,8 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
   const goStep3 = () => {
     if (!form.name.trim() || !form.phone.trim()) { setError('이름과 연락처를 입력해주세요.'); return }
     setError('')
-    if (sel?.isFree) {
-      // Skip payment step — directly submit
-      handleSubmit('free', '')
-    } else {
-      setStep(3)
-    }
+    if (sel?.isFree) handleSubmit('free', '')
+    else setStep(3)
   }
 
   const handleSubmit = async (method: PaymentMethod, orderNumber: string) => {
@@ -123,7 +131,7 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
     )
   }
 
-  // ── Step 1: Select Session ─────────────────────────────────────────────────
+  // ── Step 1 ─────────────────────────────────────────────────────────────────
   if (step === 1) {
     if (sessions.length === 0) return (
       <>
@@ -134,14 +142,14 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
       </>
     )
 
-    // Group by subject
-    const subjects = Array.from(new Set(sorted.map(s => s.subject)))
+    const subjects = Array.from(new Set(sorted.map(s => s.subject ?? '기타')))
 
     return (
       <>
         <Steps current={1} />
+        {error && <div className="alert alert-red" style={{ marginBottom: 12 }}>{error}</div>}
         {subjects.map(subject => {
-          const group = sorted.filter(s => s.subject === subject)
+          const group = sorted.filter(s => (s.subject ?? '기타') === subject)
           return (
             <div key={subject} className="card" style={{ marginBottom: '1rem' }}>
               <div className="session-subject-title">{subject}</div>
@@ -150,11 +158,10 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
                   const full = s.bookedCount >= s.capacity
                   const rem  = s.capacity - s.bookedCount
                   const pct  = s.capacity > 0 ? Math.round((s.bookedCount / s.capacity) * 100) : 0
-                  const sel_ = selId === s.id
                   return (
                     <div
                       key={s.id}
-                      className={`session-row${sel_ ? ' selected' : ''}${full ? ' full' : ''}`}
+                      className={`session-row${selId === s.id ? ' selected' : ''}${full ? ' full' : ''}`}
                       onClick={() => !full && setSelId(s.id)}
                     >
                       <div className="session-row-info">
@@ -172,8 +179,9 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
                           <span className={`badge ${full ? 'badge-red' : rem <= 2 ? 'badge-amber' : 'badge-green'}`}>
                             {full ? '마감' : `잔여 ${rem}석`}
                           </span>
+                          {/* [버그#6] price undefined 방어 */}
                           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                            {s.isFree ? '무료' : `₩${s.price.toLocaleString()}`}
+                            {s.isFree ? '무료' : `₩${(s.price ?? 0).toLocaleString()}`}
                           </span>
                         </div>
                       </div>
@@ -193,8 +201,10 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
     )
   }
 
-  // ── Step 2: Info ───────────────────────────────────────────────────────────
-  if (step === 2 && sel) {
+  // ── Step 2 ─────────────────────────────────────────────────────────────────
+  // [버그#4] sel이 null이면 step 1로 돌아감 (useEffect에서 처리되지만 렌더 방어)
+  if (step === 2) {
+    if (!sel) return null
     return (
       <>
         <Steps current={2} />
@@ -203,12 +213,10 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
             <div className="session-summary-subject">{sel.subject}</div>
             <div className="session-summary-meta">
               {sel.date} · {sel.startTime} – {endTime(sel.startTime, sel.durationMinutes)}
-              &nbsp;·&nbsp;{sel.isFree ? '무료' : `₩${sel.price.toLocaleString()}`}
+              &nbsp;·&nbsp;{sel.isFree ? '무료' : `₩${(sel.price ?? 0).toLocaleString()}`}
             </div>
           </div>
-
           <div className="card-title" style={{ marginTop: '1.25rem' }}>수강생 정보</div>
-
           <div className="form-group">
             <label className="form-label">이름</label>
             <input className="form-input" type="text" value={form.name} placeholder="홍길동"
@@ -219,9 +227,7 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
             <input className="form-input" type="tel" value={form.phone} placeholder="010-0000-0000"
               onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
           </div>
-
           {error && <div className="alert alert-red" style={{ marginBottom: 12 }}>{error}</div>}
-
           <div className="btn-row">
             <button className="btn" onClick={() => setStep(1)}>← 이전</button>
             <button className="btn btn-navy" onClick={goStep3} disabled={submitting}>
@@ -233,8 +239,9 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
     )
   }
 
-  // ── Step 3: Payment ────────────────────────────────────────────────────────
-  if (step === 3 && sel) {
+  // ── Step 3 ─────────────────────────────────────────────────────────────────
+  if (step === 3) {
+    if (!sel) return null
     return (
       <PaymentStep
         session={sel}
@@ -251,7 +258,7 @@ export default function StudentView({ sessions, settings, onBook }: Props) {
   return null
 }
 
-// ── Payment Step Component ─────────────────────────────────────────────────────
+// ── Payment Step ───────────────────────────────────────────────────────────────
 interface PaymentStepProps {
   session: Session
   settings: Settings
@@ -263,23 +270,18 @@ interface PaymentStepProps {
 }
 
 function PaymentStep({ session, settings, name, submitting, error, onBack, onSubmit }: PaymentStepProps) {
-  const [method, setMethod]   = useState<PaymentMethod | ''>('')
-  const [orderNum, setOrderNum] = useState('')
+  const [method, setMethod]       = useState<PaymentMethod | ''>('')
+  const [orderNum, setOrderNum]   = useState('')
   const [depositor, setDepositor] = useState(name)
 
-  const pm = settings.paymentMethods
+  // [버그#5] paymentMethods undefined 방어
+  const pm = settings.paymentMethods ?? { card: true, easypay: true, transfer: true }
 
   const availableMethods: { id: PaymentMethod; label: string; icon: string }[] = [
-    ...(pm.card    ? [{ id: 'card'     as PaymentMethod, label: '신용/체크카드',        icon: '💳' }] : []),
-    ...(pm.easypay ? [{ id: 'easypay'  as PaymentMethod, label: '간편결제',              icon: '⚡' }] : []),
-    ...(pm.transfer? [{ id: 'transfer' as PaymentMethod, label: '무통장입금·계좌이체',   icon: '🏦' }] : []),
+    ...(pm.card     ? [{ id: 'card'     as PaymentMethod, label: '신용/체크카드',       icon: '💳' }] : []),
+    ...(pm.easypay  ? [{ id: 'easypay'  as PaymentMethod, label: '간편결제',             icon: '⚡' }] : []),
+    ...(pm.transfer ? [{ id: 'transfer' as PaymentMethod, label: '무통장입금·계좌이체',  icon: '🏦' }] : []),
   ]
-
-  function endTime(startTime: string, durationMinutes: number): string {
-    const [h, m] = startTime.split(':').map(Number)
-    const total = h * 60 + m + durationMinutes
-    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
-  }
 
   const handlePay = () => {
     if (!method) return
@@ -290,10 +292,10 @@ function PaymentStep({ session, settings, name, submitting, error, onBack, onSub
   return (
     <>
       <div className="steps">
-        {([1,2,3] as StudentStep[]).map((n, i) => (
+        {([1, 2, 3] as StudentStep[]).map((n, i) => (
           <div key={n} style={{ display: 'flex', alignItems: 'center', flex: i < 2 ? 1 : 'none' }}>
             <div className={`step-num ${n < 3 ? 'done' : 'active'}`}>{n < 3 ? '✓' : n}</div>
-            <span className="step-label">{['세션 선택','정보 입력','결제'][i]}</span>
+            <span className="step-label">{['세션 선택', '정보 입력', '결제'][i]}</span>
             {i < 2 && <div className="step-line" />}
           </div>
         ))}
@@ -310,7 +312,7 @@ function PaymentStep({ session, settings, name, submitting, error, onBack, onSub
 
         <div className="pay-box">
           <div className="pay-label">결제 금액</div>
-          <div className="pay-amount">₩{session.price.toLocaleString()}</div>
+          <div className="pay-amount">₩{(session.price ?? 0).toLocaleString()}</div>
         </div>
 
         <div className="card-title">결제 수단 선택</div>
@@ -327,7 +329,6 @@ function PaymentStep({ session, settings, name, submitting, error, onBack, onSub
           ))}
         </div>
 
-        {/* Card / Easy Pay */}
         {(method === 'card' || method === 'easypay') && (
           <div style={{ marginTop: '1rem' }}>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.7 }}>
@@ -348,23 +349,19 @@ function PaymentStep({ session, settings, name, submitting, error, onBack, onSub
                 주문번호&nbsp;<span style={{ color: '#A32D2D', fontSize: 11 }}>결제 후 입력</span>
               </label>
               <input className="form-input" type="text" value={orderNum}
-                placeholder="네이버 주문번호"
-                onChange={e => setOrderNum(e.target.value)} />
+                placeholder="네이버 주문번호" onChange={e => setOrderNum(e.target.value)} />
             </div>
           </div>
         )}
 
-        {/* Bank Transfer */}
         {method === 'transfer' && (
           <div style={{ marginTop: '1rem' }}>
             {settings.bankAccount ? (
               <div className="bank-info-box">
                 <div className="bank-info-label">입금 계좌</div>
-                <div className="bank-info-account">
-                  {settings.bankName} {settings.bankAccount}
-                </div>
+                <div className="bank-info-account">{settings.bankName} {settings.bankAccount}</div>
                 <div className="bank-info-holder">예금주: {settings.bankHolder}</div>
-                <div className="bank-info-amount">₩{session.price.toLocaleString()}</div>
+                <div className="bank-info-amount">₩{(session.price ?? 0).toLocaleString()}</div>
               </div>
             ) : (
               <div className="alert alert-amber" style={{ marginBottom: 12 }}>
@@ -374,8 +371,7 @@ function PaymentStep({ session, settings, name, submitting, error, onBack, onSub
             <div className="form-group" style={{ marginTop: 12 }}>
               <label className="form-label">입금자명</label>
               <input className="form-input" type="text" value={depositor}
-                placeholder="입금자 이름"
-                onChange={e => setDepositor(e.target.value)} />
+                placeholder="입금자 이름" onChange={e => setDepositor(e.target.value)} />
             </div>
           </div>
         )}
@@ -384,11 +380,7 @@ function PaymentStep({ session, settings, name, submitting, error, onBack, onSub
 
         <div className="btn-row" style={{ marginTop: '1rem' }}>
           <button className="btn" onClick={onBack}>← 이전</button>
-          <button
-            className="btn btn-navy"
-            onClick={handlePay}
-            disabled={!method || submitting}
-          >
+          <button className="btn btn-navy" onClick={handlePay} disabled={!method || submitting}>
             {submitting ? '처리 중...' : '신청 완료'}
           </button>
         </div>

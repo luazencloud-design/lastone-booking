@@ -47,7 +47,7 @@ export const deleteSession = (id: string, pw: string) =>
   req<void>('/sessions', { method: 'DELETE', body: JSON.stringify({ id }), headers: { 'x-admin-password': pw } })
 
 // ─── Bookings ─────────────────────────────────────────────────────────────────
-export const getBookings   = ()            => req<Booking[]>('/bookings')
+export const getBookings   = (pw: string)    => req<Booking[]>("/bookings", { headers: { "x-admin-password": pw } })
 export const createBooking = (b: Booking)  => req<Booking>('/bookings', { method: 'POST', body: JSON.stringify(b) })
 export const deleteBooking = (id: string, pw: string) =>
   req<void>('/bookings', { method: 'DELETE', body: JSON.stringify({ id }), headers: { 'x-admin-password': pw } })

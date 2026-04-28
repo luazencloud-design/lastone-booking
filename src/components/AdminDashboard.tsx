@@ -16,39 +16,51 @@ interface Props {
   onRefresh: () => Promise<void>
 }
 
+// ── 방어적 헬퍼 ───────────────────────────────────────────────────────────────
+function safeDate(d: string | undefined) { return d ?? '' }
+function safeStr(s: string | undefined)  { return s ?? '' }
+
+function endTime(startTime: string | undefined, dur: number) {
+  if (!startTime || !startTime.includes(':')) return '--:--'
+  const [h, m] = startTime.split(':').map(Number)
+  const total = h * 60 + m + (dur || 0)
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+
 function barColor(s: Session) {
   const full = s.bookedCount >= s.capacity
   return full ? '#E24B4A' : s.bookedCount >= s.capacity * 0.7 ? '#BA7517' : '#185FA5'
 }
 
-function endTime(startTime: string, dur: number) {
-  const [h, m] = startTime.split(':').map(Number)
-  const total = h * 60 + m + dur
-  return `${String(Math.floor(total/60)).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`
-}
-
-export default function AdminDashboard({ sessions, bookings, settings }: Props) {
+export default function AdminDashboard({ sessions, bookings }: Props) {
   const today     = new Date().toISOString().slice(0, 10)
-  const todayN    = bookings.filter(b => b.createdAt.startsWith(today)).length
+  // 방어: createdAt 없는 booking 처리
+  const todayN    = bookings.filter(b => b.createdAt?.startsWith(today)).length
   const totalRev  = bookings.reduce((acc, bk) => {
-    const s = sessions.find(s => s.id === bk.sessionId)
+    const s = sessions.find(x => x.id === bk.sessionId)
     return acc + (s?.price ?? 0)
   }, 0)
-  const totalSeats  = sessions.reduce((a, s) => a + s.capacity, 0)
-  const filledSeats = sessions.reduce((a, s) => a + s.bookedCount, 0)
+  const totalSeats  = sessions.reduce((a, s) => a + (s.capacity ?? 0), 0)
+  const filledSeats = sessions.reduce((a, s) => a + (s.bookedCount ?? 0), 0)
   const utilPct     = totalSeats > 0 ? Math.round((filledSeats / totalSeats) * 100) : 0
 
-  const sorted = [...sessions].sort((a, b) => a.date.localeCompare(b.date))
+  const sorted = [...sessions].sort((a, b) =>
+    safeDate(a.date).localeCompare(safeDate(b.date))
+  )
+
+  // ── Chart.js: sessions 변경 시 캔버스 재사용 충돌 방지용 key ───────────────
+  const chartKey = sessions.map(s => s.id).join(',')
 
   const barData = {
-    labels: sorted.map(s => `${s.subject}\n${s.date.slice(5)}`),
+    labels: sorted.map(s => `${safeStr(s.subject)}\n${safeDate(s.date).slice(5)}`),
     datasets: [
-      { label: '신청', data: sorted.map(s => s.bookedCount),                           backgroundColor: '#185FA5', borderRadius: 4 },
-      { label: '잔여', data: sorted.map(s => Math.max(0, s.capacity - s.bookedCount)), backgroundColor: 'rgba(0,0,0,0.06)', borderRadius: 4 },
+      { label: '신청', data: sorted.map(s => s.bookedCount ?? 0),                           backgroundColor: '#185FA5', borderRadius: 4 },
+      { label: '잔여', data: sorted.map(s => Math.max(0, (s.capacity ?? 0) - (s.bookedCount ?? 0))), backgroundColor: 'rgba(0,0,0,0.06)', borderRadius: 4 },
     ],
   }
   const chartOpts: any = {
     responsive: true, maintainAspectRatio: false,
+    animation: false,  // 렌더 중 상태 변경으로 인한 애니메이션 충돌 방지
     plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c: any) => `${c.dataset.label}: ${c.parsed.y}명` } } },
     scales: {
       x: { stacked: true, ticks: { color: '#888780', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
@@ -62,10 +74,13 @@ export default function AdminDashboard({ sessions, bookings, settings }: Props) 
   }
   const donutOpts: any = {
     responsive: true, maintainAspectRatio: false, cutout: '68%',
+    animation: false,
     plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c: any) => `${c.label}: ${c.parsed}석` } } },
   }
 
-  const recent = [...bookings].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5)
+  const recent = [...bookings].sort((a, b) =>
+    (b.createdAt ?? '').localeCompare(a.createdAt ?? '')
+  ).slice(0, 5)
 
   return (
     <>
@@ -80,7 +95,8 @@ export default function AdminDashboard({ sessions, bookings, settings }: Props) 
         <div className="card"><div className="empty-state">세션을 추가하면 차트가 표시됩니다.</div></div>
       ) : (
         <>
-          <div className="charts-row">
+          {/* key 로 sessions 변경 시 차트 완전 재마운트 → 캔버스 충돌 방지 */}
+          <div className="charts-row" key={chartKey}>
             <div className="chart-card">
               <div className="card-title">세션별 신청 현황</div>
               <div style={{ height: 200 }}><Bar data={barData} options={chartOpts} /></div>
@@ -104,12 +120,14 @@ export default function AdminDashboard({ sessions, bookings, settings }: Props) 
           <div className="card">
             <div className="card-title">세션별 충원율</div>
             {sorted.map(s => {
-              const pct = s.capacity > 0 ? Math.round((s.bookedCount / s.capacity) * 100) : 0
+              const cap = s.capacity ?? 0
+              const booked = s.bookedCount ?? 0
+              const pct = cap > 0 ? Math.round((booked / cap) * 100) : 0
               return (
                 <div key={s.id} className="util-row">
                   <div className="util-label">
-                    <span>{s.subject} · {s.date} {s.startTime}–{endTime(s.startTime, s.durationMinutes)}</span>
-                    <span>{s.bookedCount}/{s.capacity}명 ({pct}%)</span>
+                    <span>{safeStr(s.subject)} · {safeDate(s.date)} {safeStr(s.startTime)}–{endTime(s.startTime, s.durationMinutes)}</span>
+                    <span>{booked}/{cap}명 ({pct}%)</span>
                   </div>
                   <div className="util-track">
                     <div className="util-fill" style={{ width: `${pct}%`, background: barColor(s) }} />
@@ -128,7 +146,7 @@ export default function AdminDashboard({ sessions, bookings, settings }: Props) 
                   <div key={bk.id} className="bk-row">
                     <div>
                       <div className="bk-name">{bk.name}</div>
-                      <div className="bk-meta">{s ? `${s.subject} · ${s.date} ${s.startTime}` : '—'}</div>
+                      <div className="bk-meta">{s ? `${safeStr(s.subject)} · ${safeDate(s.date)} ${safeStr(s.startTime)}` : '—'}</div>
                     </div>
                     <span className="badge badge-blue">{bk.paymentMethod === 'free' ? '무료' : bk.orderNumber}</span>
                   </div>
