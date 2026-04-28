@@ -83,11 +83,16 @@ export default function AdminSessions({ sessions, bookings, settings, adminPw, o
       <div className="card">
         <div className="card-title">세션 추가</div>
 
-        <div className="form-group">
-          <label className="form-label">수강 과목</label>
-          <input className="form-input" type="text" value={form.subject}
-            placeholder="수학, 영어, 국어 등"
-            onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} />
+        {/* Subject — prominent top field */}
+        <div className="subject-field-wrap">
+          <label className="subject-field-label">수강 과목</label>
+          <input
+            className="form-input subject-field-input"
+            type="text"
+            value={form.subject}
+            placeholder="예) 수학, 영어, 국어"
+            onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
+          />
         </div>
 
         <div className="form-row" style={{ marginBottom: 14 }}>

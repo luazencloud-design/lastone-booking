@@ -294,3 +294,30 @@ body {
 
 /* ── Divider ──────────────────────────────────────────────────────────────── */
 .divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+
+/* ── Subject Field (Session Form) ─────────────────────────────────────────── */
+.subject-field-wrap {
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.subject-field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 7px;
+  letter-spacing: 0.01em;
+}
+.subject-field-label::before {
+  content: '📚 ';
+}
+.subject-field-input {
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  padding: 12px 14px !important;
+}
+.subject-field-input:focus {
+  border-color: var(--gold-mid) !important;
+  box-shadow: 0 0 0 3px rgba(186,117,23,0.12) !important;
+}
