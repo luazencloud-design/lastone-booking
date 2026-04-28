@@ -5,17 +5,20 @@ const BASE = '/api'
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   let res: Response
   try {
+    // opts를 먼저 spread한 뒤 headers를 덮어써야
+    // Content-Type: application/json이 항상 보존됨
     res = await fetch(`${BASE}${path}`, {
-      headers: { 'Content-Type': 'application/json', ...opts?.headers },
       ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        ...opts?.headers,   // x-admin-password 같은 추가 헤더 병합
+      },
     })
   } catch (e: any) {
-    // 네트워크 오류 (API 라우트 자체에 못 닿은 경우)
     throw new Error(`네트워크 오류 - API에 연결할 수 없습니다: ${e.message || ''}`)
   }
 
   if (!res.ok) {
-    // HTTP/2는 statusText가 빈 문자열 → 상태코드로 폴백
     const fallback = `HTTP ${res.status} 오류`
     let errMsg = fallback
     try {
@@ -47,8 +50,8 @@ export const deleteSession = (id: string, pw: string) =>
   req<void>('/sessions', { method: 'DELETE', body: JSON.stringify({ id }), headers: { 'x-admin-password': pw } })
 
 // ─── Bookings ─────────────────────────────────────────────────────────────────
-export const getBookings   = (pw: string)    => req<Booking[]>("/bookings", { headers: { "x-admin-password": pw } })
-export const createBooking = (b: Booking)  => req<Booking>('/bookings', { method: 'POST', body: JSON.stringify(b) })
+export const getBookings   = (pw: string)             => req<Booking[]>('/bookings', { headers: { 'x-admin-password': pw } })
+export const createBooking = (b: Booking)             => req<Booking>('/bookings', { method: 'POST', body: JSON.stringify(b) })
 export const deleteBooking = (id: string, pw: string) =>
   req<void>('/bookings', { method: 'DELETE', body: JSON.stringify({ id }), headers: { 'x-admin-password': pw } })
 

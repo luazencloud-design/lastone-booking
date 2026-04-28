@@ -1,4 +1,5 @@
 const { redis, KEYS, checkAdmin } = require('./_redis')
+const { parseBody } = require('./_parse')
 
 const DEFAULT_SETTINGS = {
   className: '라스트원 넥스트원 보충',
@@ -24,7 +25,7 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'PUT') {
     if (!checkAdmin(req)) return res.status(401).json({ error: '인증 필요' })
-    const settings = { ...DEFAULT_SETTINGS, ...req.body }
+    const settings = { ...DEFAULT_SETTINGS, ...parseBody(req) }
     await redis.set(KEYS.settings, settings)
     return res.json(settings)
   }

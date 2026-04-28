@@ -1,4 +1,5 @@
 const { redis, KEYS, checkAdmin } = require('./_redis')
+const { parseBody } = require('./_parse')
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -13,7 +14,7 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'POST') {
     if (!checkAdmin(req)) return res.status(401).json({ error: '인증 필요' })
-    const session = req.body
+    const session = parseBody(req)
     const sessions = (await redis.get(KEYS.sessions)) || []
     sessions.push(session)
     await redis.set(KEYS.sessions, sessions)
@@ -22,7 +23,7 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'DELETE') {
     if (!checkAdmin(req)) return res.status(401).json({ error: '인증 필요' })
-    const { id } = req.body || {}
+    const { id } = parseBody(req)
     const sessions = (await redis.get(KEYS.sessions)) || []
     await redis.set(KEYS.sessions, sessions.filter(s => s.id !== id))
     const bookings = (await redis.get(KEYS.bookings)) || []

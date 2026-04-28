@@ -1,3 +1,4 @@
+const { parseBody } = require('./_parse')
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS')
@@ -5,12 +6,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).end()
 
-  let body = req.body
-  if (!body || typeof body === 'string') {
-    try { body = JSON.parse(body || '{}') } catch { body = {} }
-  }
-
-  const { password } = body || {}
+  const { password } = parseBody(req)
   const adminPw = process.env.ADMIN_PASSWORD
 
   if (!adminPw) {
